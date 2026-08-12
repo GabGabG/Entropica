@@ -1,16 +1,22 @@
-import pytest
-from src.entropica.backends.cupy import knn_statistics, _get_knn_kernel, _LINEAR_KNN_CODE
-import cupy as cp
 from collections import namedtuple
-from scipy.spatial import cKDTree
+
+import cupy as cp
 import numpy as np
+import pytest
+from scipy.spatial import cKDTree
+
+from entropica.backends.cupy import (
+    _LINEAR_KNN_CODE,
+    _get_knn_kernel,
+    knn_statistics,
+)
 
 
-def knn_statistics_kdtree(x: np.ndarray, y: np.ndarray, k: int):
+def knn_statistics_kdtree(x: np.ndarray, y: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
     n_pairs, n_samples = x.shape
 
     nx = np.empty((n_pairs, n_samples), dtype=np.int32)
-    ny = nx.copy()
+    ny = np.empty((n_pairs, n_samples), dtype=np.int32)
 
     for pair in range(n_pairs):
         points = np.column_stack((x[pair], y[pair]))
@@ -20,14 +26,17 @@ def knn_statistics_kdtree(x: np.ndarray, y: np.ndarray, k: int):
         x_tree = cKDTree(x[pair, :, None])
         y_tree = cKDTree(y[pair, :, None])
 
-        nx[pair] = x_tree.query_ball_point(x[pair, :, None], r, p=np.inf, return_length=True)
-        ny[pair] = y_tree.query_ball_point(y[pair, :, None], r, p=np.inf, return_length=True)
+        nx[pair] = x_tree.query_ball_point(
+            x[pair, :, None], r, p=np.inf, return_length=True
+        )
+        ny[pair] = y_tree.query_ball_point(
+            y[pair, :, None], r, p=np.inf, return_length=True
+        )
 
     return nx, ny
 
 
 class TestGetKNNKernel:
-
     @pytest.fixture(autouse=True)
     def setup(self):
         _get_knn_kernel.cache_clear()
@@ -39,12 +48,16 @@ class TestGetKNNKernel:
     def test_get_knn_kernel_attributes(self, k: int):
         params = namedtuple("params", ["name", "dtype", "ctype", "raw", "is_const"])
         kernel = _get_knn_kernel(k=k)
-        in_params = [params("x_pairs", None, "T", True, True),
-                     params("y_pairs", None, "T", True, True),
-                     params("sample_size", cp.dtype("int32"), "int", False, True)]
+        in_params = [
+            params("x_pairs", None, "T", True, True),
+            params("y_pairs", None, "T", True, True),
+            params("sample_size", cp.dtype("int32"), "int", False, True),
+        ]
 
-        out_params = [params("nx", cp.dtype("int32"), "int", False, False),
-                      params("ny", cp.dtype("int32"), "int", False, False)]
+        out_params = [
+            params("nx", cp.dtype("int32"), "int", False, False),
+            params("ny", cp.dtype("int32"), "int", False, False),
+        ]
 
         assert kernel.name == "linear_knn_kernel"
         assert kernel.preamble == f"#define MAX_DISTS {k + 1}"
@@ -86,7 +99,6 @@ class TestGetKNNKernel:
 
 
 class TestKNNStatistics:
-
     def test_wrong_x_3D(self):
         x = cp.arange(100).reshape(2, 5, 10)
         y = cp.arange(100).reshape(10, 10)
@@ -128,7 +140,7 @@ class TestKNNStatistics:
         y = cp.random.randn(2 * k, 2 * k)
         try:
             knn_statistics(x, y, k)
-        except BaseException as e:
+        except Exception as e:
             pytest.fail(f"Exception raised:\n{e}")
 
     @pytest.mark.parametrize("k", range(1, 11))
@@ -146,11 +158,13 @@ class TestKNNStatistics:
 
     @pytest.mark.parametrize("n_pairs", [1, 2, 5, 10, 100, 1_000])
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
-    def test_knn_statistics_against_kdtree_variable_number_pairs(self, n_pairs: int, dtype: np.dtype):
+    def test_knn_statistics_against_kdtree_variable_number_pairs(
+            self, n_pairs: int, dtype: np.dtype
+    ):
         seed = 42
         generator = np.random.default_rng(seed=seed)
-        x = generator.standard_normal(size=(10, 100), dtype=dtype)
-        y = generator.standard_normal(size=(10, 100), dtype=dtype)
+        x = generator.standard_normal(size=(n_pairs, 100), dtype=dtype)
+        y = generator.standard_normal(size=(n_pairs, 100), dtype=dtype)
 
         nx_tree, ny_tree = knn_statistics_kdtree(x, y, k=3)
 
@@ -160,14 +174,30 @@ class TestKNNStatistics:
 
     @pytest.mark.parametrize("n_samples", [5, 10, 100, 1_000])
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
-    def test_knn_statistics_against_kdtree_variable_number_samples(self, n_samples: int, dtype: np.dtype):
+    def test_knn_statistics_against_kdtree_variable_number_samples(
+            self, n_samples: int, dtype: np.dtype
+    ):
         seed = 42
         generator = np.random.default_rng(seed=seed)
         x = generator.standard_normal(size=(10, n_samples), dtype=dtype)
         y = generator.standard_normal(size=(10, n_samples), dtype=dtype)
-        k =min(1, n_samples - 2)
+        k = 3
         nx_tree, ny_tree = knn_statistics_kdtree(x, y, k)
 
         nx_gpu, ny_gpu = knn_statistics(cp.asarray(x), cp.asarray(y), k=k)
+        np.testing.assert_array_equal(nx_tree, nx_gpu.get())
+        np.testing.assert_array_equal(ny_tree, ny_gpu.get())
+
+    @pytest.mark.parametrize("dtype", [np.float32, np.float64])
+    def test_single_pair(self, dtype: np.dtype):
+        seed = 42
+        generator = np.random.default_rng(seed=seed)
+
+        x = generator.standard_normal((1, 100), dtype=dtype)
+        y = generator.standard_normal((1, 100), dtype=dtype)
+
+        nx_tree, ny_tree = knn_statistics_kdtree(x, y, k=3)
+        nx_gpu, ny_gpu = knn_statistics(cp.asarray(x), cp.asarray(y), k=3)
+
         np.testing.assert_array_equal(nx_tree, nx_gpu.get())
         np.testing.assert_array_equal(ny_tree, ny_gpu.get())
