@@ -6,17 +6,24 @@ from ..backends.cupy import knn_statistics
 
 
 class KNNMutualInformation:
-
-    def __init__(self,
-                 k: int = 3,
-                 add_noise: bool = True,
-                 noise_intensity: float = 1e-8,
-                 dtype: cp.dtype = None,
-                 random_state: int | cp.random.Generator | None = None,
-                 ):
+    def __init__(
+            self,
+            k: int = 3,
+            add_noise: bool = True,
+            noise_intensity: float = 1e-8,
+            dtype: cp.dtype = cp.float32,
+            random_state: int | cp.random.Generator | None = None,
+    ):
+        if k < 1:
+            raise ValueError("k must be at least one.")
         self._k = k
         self._add_noise = add_noise
         self._noise_intensity = noise_intensity
+        dtype = cp.dtype(dtype)
+
+        if dtype not in (cp.dtype(cp.float32), cp.dtype(cp.float64)):
+            msg = f"dtype must be float32 or float64, got {dtype}"
+            raise TypeError(msg)
         self._dtype = dtype
         self.random_state = random_state
 
@@ -36,16 +43,21 @@ class KNNMutualInformation:
             raise TypeError(f"Unknown random_state type: {type(random_state)}")
 
     def _noisy_data(self, data: cp.ndarray) -> cp.ndarray:
-        noisy_data = data + self._noise_intensity * self._random_state.standard_normal(size=data.shape,
-                                                                                       dtype=self._dtype)
+        noisy_data = data + self._noise_intensity * self._random_state.standard_normal(
+            size=data.shape, dtype=self._dtype
+        )
         return noisy_data
 
-    def _compute_from_pairs(self, x_pairs: cp.ndarray, y_pairs: cp.ndarray) -> cp.ndarray:
+    def _compute_from_pairs(
+            self, x_pairs: cp.ndarray, y_pairs: cp.ndarray, n_samples: int
+    ) -> cp.ndarray:
         nx, ny = knn_statistics(x_pairs, y_pairs, self._k)
 
         c = digamma(self._k).astype(self._dtype)
-        d = digamma(N).astype(self._dtype)
-        avg_digamma = cp.mean(digamma(nx).astype(self._dtype) + digamma(ny).astype(self._dtype), axis=1)
+        d = digamma(n_samples).astype(self._dtype)
+        avg_digamma = cp.mean(
+            digamma(nx).astype(self._dtype) + digamma(ny).astype(self._dtype), axis=1
+        )
         return c + d - avg_digamma
 
     def compute(self, x: ArrayLike, y: ArrayLike) -> cp.ndarray:
@@ -78,7 +90,9 @@ class KNNMutualInformation:
         if dim == 3:
             m, n1, n2 = data.shape
             if n1 != n2:
-                raise ValueError("data must be square in its last two dimensions if 3D.")
+                raise ValueError(
+                    "data must be square in its last two dimensions if 3D."
+                )
             data = data.reshape(m, n1 * n2)
 
         n_samples, n_variables = data.shape

@@ -1,5 +1,6 @@
-import cupy as cp
 from functools import lru_cache
+
+import cupy as cp
 
 _LINEAR_KNN_CODE = """
 int pair_idx = i / sample_size;
@@ -66,11 +67,13 @@ def _get_knn_kernel(k: int) -> cp.ElementwiseKernel:
         out_params="int32 nx, int32 ny",
         operation=_LINEAR_KNN_CODE,
         name="linear_knn_kernel",
-        preamble=f"#define MAX_DISTS {k + 1}"
+        preamble=f"#define MAX_DISTS {k + 1}",
     )
 
 
-def knn_statistics(x_pairs: cp.ndarray, y_pairs: cp.ndarray, k: int) -> tuple[cp.ndarray, cp.ndarray]:
+def knn_statistics(
+    x_pairs: cp.ndarray, y_pairs: cp.ndarray, k: int
+) -> tuple[cp.ndarray, cp.ndarray]:
     if x_pairs.ndim != 2 or y_pairs.ndim != 2:
         raise ValueError("x_pairs and y_pairs must be 2D.")
 
