@@ -42,7 +42,7 @@ class TestKNNMutualInformation:
         assert obj._k == 3
         assert obj._add_noise
         assert obj._noise_intensity == 1e-8
-        assert obj._dtype is cp.float32
+        assert obj._dtype == cp.float32
         assert isinstance(obj._random_state, cp.random.Generator)
 
     @pytest.mark.parametrize("k", range(-10, 0))
@@ -122,21 +122,34 @@ class TestKNNMutualInformation:
 
     def test_compute_wrong_x_dim(self):
         obj = KNNMutualInformation()
-        msg = "x and y must be one-dimensional."
+        msg = "x and y must be one- or two-dimensional."
         with pytest.raises(ValueError, match=msg):
-            obj.compute(cp.arange(100).reshape(1, 100), cp.arange(100))
+            obj.compute(cp.arange(100).reshape(1, 1, 100), cp.arange(100))
 
     def test_compute_wrong_y_dim(self):
         obj = KNNMutualInformation()
-        msg = "x and y must be one-dimensional."
+        msg = "x and y must be one- or two-dimensional."
         with pytest.raises(ValueError, match=msg):
-            obj.compute(cp.arange(100), cp.arange(100).reshape(1, 100))
+            obj.compute(cp.arange(100), cp.arange(100).reshape(1, 1, 100))
 
-    def test_compute_shape_mismatch(self):
+    def test_compute_sample_mismatch(self):
         obj = KNNMutualInformation()
-        msg = "x and y must have the same shape."
+        msg = "x and y must have the same number of samples."
         with pytest.raises(ValueError, match=msg):
             obj.compute(cp.arange(100), cp.arange(99))
+
+    def test_compute_feature_mismatch(self):
+        obj = KNNMutualInformation()
+        msg = "x and y must have the same number of features or one must have one feature."
+        with pytest.raises(ValueError, match=msg):
+            obj.compute(cp.arange(100).reshape(10, 10), cp.arange(90).reshape(10, 9))
+
+    def test_compute_feature_no_mismatch(self):
+        obj = KNNMutualInformation()
+        try:
+            obj.compute(cp.arange(900).reshape(90, 10), cp.arange(90))
+        except ValueError as e:
+            pytest.fail(f"Exception raised:\n{e}")
 
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     @pytest.mark.parametrize("k", [1, 2, 5, 10])
@@ -151,6 +164,20 @@ class TestKNNMutualInformation:
 
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     @pytest.mark.parametrize("k", [1, 2, 5, 10])
+    def test_compute_no_noise_batched(self, dtype: np.dtype, k:int):
+        rng = np.random.default_rng(0)
+        B = 10
+        x = rng.standard_normal((100, B), dtype=dtype)
+        y = rng.standard_normal(100, dtype=dtype)
+        obj = KNNMutualInformation(k=k, add_noise=False, dtype=dtype)
+        mi_gpu = obj.compute(cp.asarray(x), cp.asarray(y))
+        mi_cpus = []
+        for i in range(B):
+            mi_cpus.append(mutual_information_kdtree(x[:, i], y, k=k))
+        cp.testing.assert_allclose(mi_gpu, mi_cpus, rtol=1e-5, atol=1e-6)
+
+    @pytest.mark.parametrize("dtype", [np.float32, np.float64])
+    @pytest.mark.parametrize("k", [1, 2, 5, 10])
     def test_compute_noise(self, dtype: np.dtype, k:int):
         rng = np.random.default_rng(0)
         x = rng.standard_normal(100, dtype=dtype)
@@ -159,4 +186,19 @@ class TestKNNMutualInformation:
         mi_gpu = obj.compute(cp.asarray(x), cp.asarray(y))
         mi_cpu = mutual_information_kdtree(x, y, k=k)
         cp.testing.assert_allclose(mi_gpu, mi_cpu, rtol=1e-5, atol=1e-6)
+
+    @pytest.mark.parametrize("dtype", [np.float32, np.float64])
+    @pytest.mark.parametrize("k", [1, 2, 5, 10])
+    def test_compute_noise_batched(self, dtype: np.dtype, k:int):
+        rng = np.random.default_rng(0)
+        B = 10
+        x = rng.standard_normal((100, B), dtype=dtype)
+        y = rng.standard_normal(100, dtype=dtype)
+        obj = KNNMutualInformation(k=k, add_noise=True, dtype=dtype)
+        mi_gpu = obj.compute(cp.asarray(x), cp.asarray(y))
+        mi_cpus = []
+        for i in range(B):
+            mi_cpus.append(mutual_information_kdtree(x[:, i], y, k=k))
+        cp.testing.assert_allclose(mi_gpu, mi_cpus, rtol=1e-5, atol=1e-6)
+
 
