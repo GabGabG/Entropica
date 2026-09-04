@@ -42,7 +42,7 @@ class TestKNNMutualInformation:
         assert obj._k == 3
         assert obj._add_noise
         assert obj._noise_intensity == 1e-8
-        assert obj._dtype is cp.float32
+        assert obj._dtype == cp.float32
         assert isinstance(obj._random_state, cp.random.Generator)
 
     @pytest.mark.parametrize("k", range(-10, 0))
