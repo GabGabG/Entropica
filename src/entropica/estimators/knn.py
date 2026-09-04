@@ -85,6 +85,28 @@ class KNNMutualInformation:
         x = cp.asarray(x, dtype=self._dtype)
         y = cp.asarray(y, dtype=self._dtype)
 
+        if x.ndim != 2 or y.ndim != 2:
+            raise ValueError("x and y must be two-dimensional.")
+
+        if x.shape[0] != y.shape[0]:
+            raise ValueError("x and y must have the same number of samples.")
+
+        n_samples, n_x = x.shape
+        _, n_y = y.shape
+
+        if self._add_noise:
+            x = self._noisy_data(x)
+            y = self._noisy_data(y)
+
+        idx_x = cp.repeat(cp.arange(n_x), n_y)
+        idx_y = cp.tile(cp.arange(n_y), n_x)
+
+        # One row = one (X_i, Y_j) pair
+        x_pairs = cp.ascontiguousarray(x[:, idx_x].T)
+        y_pairs = cp.ascontiguousarray(y[:, idx_y].T)
+
+        mi_scores = self._compute_from_pairs(x_pairs, y_pairs, n_samples)
+        return mi_scores.reshape(n_x, n_y)
         
 
     def compute_pairwise(self, data: ArrayLike) -> cp.ndarray:
