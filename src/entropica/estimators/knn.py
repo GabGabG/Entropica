@@ -117,10 +117,6 @@ class KNNMutualInformation:
             raise ValueError("data must be two-dimensional or three-dimensional.")
         if dim == 3:
             m, n1, n2 = data.shape
-            if n1 != n2:
-                raise ValueError(
-                    "data must be square in its last two dimensions if 3D."
-                )
             data = data.reshape(m, n1 * n2)
 
         n_samples, n_variables = data.shape
