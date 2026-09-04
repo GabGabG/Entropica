@@ -64,38 +64,22 @@ class KNNMutualInformation:
         x = cp.asarray(x, dtype=self._dtype)
         y = cp.asarray(y, dtype=self._dtype)
 
-        if x.ndim not in (1, 2) or y.ndim not in (1, 2):
-            raise ValueError("x and y must be one- or two-dimensional.")
+        if x.ndim != 1 or y.ndim != 1:
+            raise ValueError("x and y must be one-dimensional.")
 
-        if x.shape[0] != y.shape[0]:
-            raise ValueError("x and y must have the same number of samples.")
+        if x.shape != y.shape:
+            raise ValueError("x and y must have the same shape.")
 
-        n_samples = x.shape[0]
-
-        # (N,) -> (N, 1)
-        if x.ndim == 1:
-            x = x[:, None]
-
-        # (N,) -> (N, 1)
-        if y.ndim == 1:
-            y = y[:, None]
-
-        if x.shape[1] == 1:
-            x = cp.broadcast_to(x, shape=(n_samples, y.shape[1]))
-        elif y.shape[1] == 1:
-            y = cp.broadcast_to(y, shape=(n_samples, x.shape[1]))
-        elif x.shape[1] != y.shape[1]:
-            raise ValueError("x and y must have the same number of features or one must have one feature.")
+        n_samples = x.size
 
         if self._add_noise:
             x = self._noisy_data(x)
             y = self._noisy_data(y)
-        x_pairs = cp.ascontiguousarray(x.T)
-        y_pairs = cp.ascontiguousarray(y.T)
-        print(x_pairs.shape, y_pairs.shape)
+        x_pairs = cp.ascontiguousarray(x[None, :])
+        y_pairs = cp.ascontiguousarray(y[None, :])
 
         mi = self._compute_from_pairs(x_pairs, y_pairs, n_samples)
-        return mi
+        return mi[0]
 
     def compute_cross(self, x: ArrayLike, y: ArrayLike) -> cp.ndarray:
         x = cp.asarray(x, dtype=self._dtype)
