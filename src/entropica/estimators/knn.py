@@ -64,35 +64,26 @@ class KNNMutualInformation:
         x = cp.asarray(x, dtype=self._dtype)
         y = cp.asarray(y, dtype=self._dtype)
 
-        if x.ndim != 1 or y.ndim != 1:
-            raise ValueError("x and y must be one-dimensional.")
+        original_x_dim = x.ndim
+        original_y_dim = y.ndim
 
-        if x.shape != y.shape:
-            raise ValueError("x and y must have the same shape.")
-
-        n_samples = x.size
-
-        if self._add_noise:
-            x = self._noisy_data(x)
-            y = self._noisy_data(y)
-        x_pairs = cp.ascontiguousarray(x[None, :])
-        y_pairs = cp.ascontiguousarray(y[None, :])
-
-        mi = self._compute_from_pairs(x_pairs, y_pairs, n_samples)
-        return mi[0]
-
-    def compute_cross(self, x: ArrayLike, y: ArrayLike) -> cp.ndarray:
-        x = cp.asarray(x, dtype=self._dtype)
-        y = cp.asarray(y, dtype=self._dtype)
-
-        if x.ndim != 2 or y.ndim != 2:
-            raise ValueError("x and y must be two-dimensional.")
+        if original_x_dim not in (1, 2) or original_y_dim not in (1, 2):
+            raise ValueError("x and y must be one- or two-dimensional.")
 
         if x.shape[0] != y.shape[0]:
             raise ValueError("x and y must have the same number of samples.")
 
-        n_samples, n_x = x.shape
-        _, n_y = y.shape
+        n_samples = x.shape[0]
+
+        # Convert (N,) -> (N, 1)
+        if x.ndim == 1:
+            x = x[:, None]
+
+        if y.ndim == 1:
+            y = y[:, None]
+
+        n_x = x.shape[1]
+        n_y = y.shape[1]
 
         if self._add_noise:
             x = self._noisy_data(x)
@@ -101,13 +92,19 @@ class KNNMutualInformation:
         idx_x = cp.repeat(cp.arange(n_x), n_y)
         idx_y = cp.tile(cp.arange(n_y), n_x)
 
-        # One row = one (X_i, Y_j) pair
         x_pairs = cp.ascontiguousarray(x[:, idx_x].T)
         y_pairs = cp.ascontiguousarray(y[:, idx_y].T)
 
-        mi_scores = self._compute_from_pairs(x_pairs, y_pairs, n_samples)
-        return mi_scores.reshape(n_x, n_y)
-        
+        mi = self._compute_from_pairs(x_pairs, y_pairs, n_samples)
+        mi = mi.reshape(n_x, n_y)
+        if original_x_dim == 1 and original_y_dim == 1:
+            return mi[0, 0]
+        if original_x_dim == 2 and original_y_dim == 1:
+            return mi[:, 0]
+        if original_x_dim == 1 and original_y_dim == 2:
+            return mi[0, :]
+        return mi
+
 
     def compute_pairwise(self, data: ArrayLike) -> cp.ndarray:
         data = cp.asarray(data, dtype=self._dtype)
