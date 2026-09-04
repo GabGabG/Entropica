@@ -97,6 +97,12 @@ class KNNMutualInformation:
         mi = self._compute_from_pairs(x_pairs, y_pairs, n_samples)
         return mi
 
+    def compute_cross(self, x: ArrayLike, y: ArrayLike) -> cp.ndarray:
+        x = cp.asarray(x, dtype=self._dtype)
+        y = cp.asarray(y, dtype=self._dtype)
+
+        
+
     def compute_pairwise(self, data: ArrayLike) -> cp.ndarray:
         data = cp.asarray(data, dtype=self._dtype)
 
