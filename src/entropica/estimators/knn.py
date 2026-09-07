@@ -5,6 +5,8 @@ from cupyx.scipy.special import digamma
 from ..backends.cupy import knn_statistics
 
 
+# TODO: Faire une classe mère Estimator. MI en hérite, Entropy aussi, KL Divergence aussi, etc.
+# TODO: Compléter la classe mère
 class KNNMutualInformation:
     def __init__(
             self,
@@ -48,6 +50,31 @@ class KNNMutualInformation:
         )
         return noisy_data
 
+    @staticmethod
+    def _as_batched(data: cp.ndarray) -> cp.ndarray:
+        if data.ndim == 1:
+            # shape (N,), implicit batchsize = 1 and n vars = 1
+            return data[:, None, None]
+
+        if data.ndim == 2:
+            # shape (N, V), implicit batchsize = 1 (n vars = V)
+            return data[:, None, :]
+
+        if data.ndim == 3:
+            return data
+
+        raise ValueError("data must have one, two or three dimensions")
+
+    @staticmethod
+    def _restore_shape(mi: cp.ndarray, x_was_1D: bool, y_was_1D: bool) -> cp.ndarray:
+        if x_was_1D and y_was_1D:
+            return mi[0, 0, 0]
+        if x_was_1D:
+            return mi[:, 0, :]
+        if y_was_1D:
+            return mi[:, :, 0]
+        return mi
+
     def _compute_from_pairs(
             self, x_pairs: cp.ndarray, y_pairs: cp.ndarray, n_samples: int
     ) -> cp.ndarray:
@@ -64,47 +91,62 @@ class KNNMutualInformation:
         x = cp.asarray(x, dtype=self._dtype)
         y = cp.asarray(y, dtype=self._dtype)
 
-        original_x_dim = x.ndim
-        original_y_dim = y.ndim
+        x_was_1D = x.ndim == 1
+        y_was_1D = y.ndim == 1
 
-        if original_x_dim not in (1, 2) or original_y_dim not in (1, 2):
-            raise ValueError("x and y must be one- or two-dimensional.")
+        x = self._as_batched(x)
+        y = self._as_batched(y)
 
         if x.shape[0] != y.shape[0]:
             raise ValueError("x and y must have the same number of samples.")
 
         n_samples = x.shape[0]
 
-        # Convert (N,) -> (N, 1)
-        if x.ndim == 1:
-            x = x[:, None]
+        bx = x.shape[1]
+        by = y.shape[1]
 
-        if y.ndim == 1:
-            y = y[:, None]
+        dx = x.shape[2]
+        dy = y.shape[2]
 
-        n_x = x.shape[1]
-        n_y = y.shape[1]
+        if bx != by:
+            if bx == 1:
+                x = cp.broadcast_to(x, (n_samples, by, dx))
+            elif by == 1:
+                y = cp.broadcast_to(y, (n_samples, bx, dy))
+            else:
+                msg = "Batch dimensions of x and y must match, or one of them must be one.\n"
+                msg += f"Got {bx} for x and {by} for y."
+                raise ValueError(msg)
+        batch_size = max(bx, by)
 
         if self._add_noise:
             x = self._noisy_data(x)
             y = self._noisy_data(y)
 
-        idx_x = cp.repeat(cp.arange(n_x), n_y)
-        idx_y = cp.tile(cp.arange(n_y), n_x)
+        # Build all (batch size, variable_x, variable_y) pairs
+        # x_pairs, y_pairs: (B * dx * dy, N)
 
-        x_pairs = cp.ascontiguousarray(x[:, idx_x].T)
-        y_pairs = cp.ascontiguousarray(y[:, idx_y].T)
+        idx_x, idx_y = cp.meshgrid(cp.arange(dx), cp.arange(dy), indexing="ij")
+        idx_x = idx_x.ravel()
+        idx_y = idx_y.ravel()
+
+        x_pairs = x[:, :, idx_x]
+        y_pairs = y[:, :, idx_y]
+
+        x_pairs = cp.transpose(x_pairs, (1, 2, 0))
+        y_pairs = cp.transpose(y_pairs, (1, 2, 0))
+
+        x_pairs = x_pairs.reshape(batch_size * dx * dy, n_samples)
+        y_pairs = y_pairs.reshape(batch_size * dx * dy, n_samples)
+
+        x_pairs = cp.ascontiguousarray(x_pairs)
+        y_pairs = cp.ascontiguousarray(y_pairs)
 
         mi = self._compute_from_pairs(x_pairs, y_pairs, n_samples)
-        mi = mi.reshape(n_x, n_y)
-        if original_x_dim == 1 and original_y_dim == 1:
-            return mi[0, 0]
-        if original_x_dim == 2 and original_y_dim == 1:
-            return mi[:, 0]
-        if original_x_dim == 1 and original_y_dim == 2:
-            return mi[0, :]
-        return mi
+        mi = mi.reshape(batch_size, dx, dy)
+        mi = self._restore_shape(mi, x_was_1D, y_was_1D)
 
+        return mi
 
     def compute_pairwise(self, data: ArrayLike) -> cp.ndarray:
         data = cp.asarray(data, dtype=self._dtype)
