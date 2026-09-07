@@ -1,5 +1,3 @@
-from collections import namedtuple
-
 import cupy as cp
 import numpy as np
 import pytest
@@ -30,7 +28,7 @@ def mutual_information_kdtree(x: np.ndarray, y: np.ndarray, k: int) -> float:
 
 
 class TestKNNMutualInformation:
-
+    # TODO: compute with 3D data
     def test_obj_possible(self):
         try:
             KNNMutualInformation()
@@ -120,17 +118,65 @@ class TestKNNMutualInformation:
         mi_cpu = mutual_information_kdtree(x[0], y[0], k=k)
         cp.testing.assert_allclose(mi_gpu, mi_cpu, rtol=1e-5, atol=1e-6)
 
-    def test_compute_wrong_x_dim(self):
+    def test_as_batched_wrong_dimension(self):
         obj = KNNMutualInformation()
-        msg = "x and y must be one- or two-dimensional."
+        msg = "data must have one, two or three dimensions"
         with pytest.raises(ValueError, match=msg):
-            obj.compute(cp.arange(100).reshape(1, 1, 100), cp.arange(100))
+            obj._as_batched(cp.arange(100).reshape(1, 1, 1, 100))
 
-    def test_compute_wrong_y_dim(self):
+    def test_as_batched_1D(self):
         obj = KNNMutualInformation()
-        msg = "x and y must be one- or two-dimensional."
-        with pytest.raises(ValueError, match=msg):
-            obj.compute(cp.arange(100), cp.arange(100).reshape(1, 100, 1, 1))
+        initial_data = cp.arange(100)
+        final_data = obj._as_batched(initial_data)
+        assert final_data.ndim == 3
+        assert final_data.shape == (100, 1, 1)
+
+    def test_as_batched_2D(self):
+        obj = KNNMutualInformation()
+        initial_data = cp.arange(100).reshape(50, 2)
+        final_data = obj._as_batched(initial_data)
+        assert final_data.ndim == 3
+        assert final_data.shape == (50, 1, 2)
+
+    def test_as_batched_3D(self):
+        obj = KNNMutualInformation()
+        initial_data = cp.arange(300).reshape(50, 3, 2)
+        final_data = obj._as_batched(initial_data)
+        assert final_data.ndim == 3
+        assert final_data.shape == (50, 3, 2)
+        cp.testing.assert_array_equal(final_data, initial_data)
+
+    def test_restore_shape_x_was_1D_y_was_1D(self):
+        obj = KNNMutualInformation()
+        mi = cp.random.rand(1, 1, 1)
+        after = obj._restore_shape(mi, True, True)
+        assert after.ndim == 0
+        assert after.shape == tuple()
+        cp.testing.assert_array_equal(mi[0, 0, 0], after)
+
+    def test_restore_shape_x_was_1D(self):
+        obj = KNNMutualInformation()
+        mi = cp.random.rand(10, 1, 3)
+        after = obj._restore_shape(mi, True, False)
+        assert after.ndim == 2
+        assert after.shape == (10, 3)
+        cp.testing.assert_array_equal(mi[:, 0, :], after)
+
+    def test_restore_shape_y_was_1D(self):
+        obj = KNNMutualInformation()
+        mi = cp.random.rand(10, 3, 1)
+        after = obj._restore_shape(mi, False, True)
+        assert after.ndim == 2
+        assert after.shape == (10, 3)
+        cp.testing.assert_array_equal(mi[:, :, 0], after)
+
+    def test_restore_shape_both_not_1D(self):
+        obj = KNNMutualInformation()
+        mi = cp.random.rand(10, 4, 3)
+        after = obj._restore_shape(mi, False, False)
+        assert after.ndim == 3
+        assert after.shape == (10, 4, 3)
+        cp.testing.assert_array_equal(mi, after)
 
     def test_compute_shape_mismatch(self):
         obj = KNNMutualInformation()
@@ -163,7 +209,7 @@ class TestKNNMutualInformation:
         for i in range(nx):
             for j in range(ny):
                 mi_cpu[i, j] = mutual_information_kdtree(x[:, i], y[:, j], k=k)
-        cp.testing.assert_allclose(mi_gpu, mi_cpu, rtol=1e-5, atol=1e-6)
+        cp.testing.assert_allclose(mi_gpu[0], mi_cpu, rtol=1e-5, atol=1e-6)
 
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     @pytest.mark.parametrize("k", [1, 2, 5, 10])
@@ -177,7 +223,7 @@ class TestKNNMutualInformation:
         mi_cpu = np.empty((nx,), dtype=dtype)
         for i in range(nx):
             mi_cpu[i] = mutual_information_kdtree(x[:, i], y, k=k)
-        cp.testing.assert_allclose(mi_gpu, mi_cpu, rtol=1e-5, atol=1e-6)
+        cp.testing.assert_allclose(mi_gpu[0], mi_cpu, rtol=1e-5, atol=1e-6)
 
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     @pytest.mark.parametrize("k", [1, 2, 5, 10])
@@ -191,7 +237,7 @@ class TestKNNMutualInformation:
         mi_cpu = np.empty((ny,), dtype=dtype)
         for i in range(ny):
             mi_cpu[i] = mutual_information_kdtree(x, y[:, i], k=k)
-        cp.testing.assert_allclose(mi_gpu, mi_cpu, rtol=1e-5, atol=1e-6)
+        cp.testing.assert_allclose(mi_gpu[0], mi_cpu, rtol=1e-5, atol=1e-6)
 
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     @pytest.mark.parametrize("k", [1, 2, 5, 10])
@@ -218,7 +264,7 @@ class TestKNNMutualInformation:
         for i in range(nx):
             for j in range(ny):
                 mi_cpu[i, j] = mutual_information_kdtree(x[:, i], y[:, j], k=k)
-        cp.testing.assert_allclose(mi_gpu, mi_cpu, rtol=1e-5, atol=1e-6)
+        cp.testing.assert_allclose(mi_gpu[0], mi_cpu, rtol=1e-5, atol=1e-6)
 
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     @pytest.mark.parametrize("k", [1, 2, 5, 10])
@@ -232,7 +278,7 @@ class TestKNNMutualInformation:
         mi_cpu = np.empty((nx,), dtype=dtype)
         for i in range(nx):
             mi_cpu[i] = mutual_information_kdtree(x[:, i], y, k=k)
-        cp.testing.assert_allclose(mi_gpu, mi_cpu, rtol=1e-5, atol=1e-6)
+        cp.testing.assert_allclose(mi_gpu[0], mi_cpu, rtol=1e-5, atol=1e-6)
 
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     @pytest.mark.parametrize("k", [1, 2, 5, 10])
@@ -246,7 +292,7 @@ class TestKNNMutualInformation:
         mi_cpu = np.empty((ny,), dtype=dtype)
         for i in range(ny):
             mi_cpu[i] = mutual_information_kdtree(x, y[:, i], k=k)
-        cp.testing.assert_allclose(mi_gpu, mi_cpu, rtol=1e-5, atol=1e-6)
+        cp.testing.assert_allclose(mi_gpu[0], mi_cpu, rtol=1e-5, atol=1e-6)
 
 
     def test_compute_pairwise_wrong_dim_1D(self):
