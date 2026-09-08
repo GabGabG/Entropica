@@ -25,10 +25,7 @@ def mutual_information_kdtree(x: np.ndarray, y: np.ndarray, k: int) -> float:
     return digamma(k) + digamma(n_samples) - np.mean(digamma(nx) + digamma(ny))
 
 
-
-
 class TestKNNMutualInformation:
-    # TODO: compute with 3D data
     def test_obj_possible(self):
         try:
             KNNMutualInformation()
@@ -76,7 +73,7 @@ class TestKNNMutualInformation:
         assert final_gen != initial_gen
 
     @pytest.mark.parametrize("seed", range(0, 10))
-    def test_random_state_setter_seed(self, seed:int):
+    def test_random_state_setter_seed(self, seed: int):
         obj = KNNMutualInformation()
         obj.random_state = seed
         assert isinstance(obj.random_state, cp.random.Generator)
@@ -97,7 +94,7 @@ class TestKNNMutualInformation:
 
     @pytest.mark.parametrize("dtype", [cp.float32, cp.float64])
     @pytest.mark.parametrize("intensity", [-2, -1, 1, 2])
-    def test_noisy_data(self, dtype:cp.dtype, intensity:int):
+    def test_noisy_data(self, dtype: cp.dtype, intensity: int):
         data = cp.random.standard_normal((10, 1_000), dtype=dtype)
         obj = KNNMutualInformation(noise_intensity=intensity)
         noisy = obj._noisy_data(data)
@@ -109,7 +106,7 @@ class TestKNNMutualInformation:
 
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     @pytest.mark.parametrize("k", [1, 2, 5, 10])
-    def test_compute_from_pairs(self, dtype:np.dtype, k:int):
+    def test_compute_from_pairs(self, dtype: np.dtype, k: int):
         rng = np.random.default_rng(42)
         x = rng.standard_normal((1, 100), dtype=dtype)
         y = rng.standard_normal((1, 100), dtype=dtype)
@@ -186,7 +183,7 @@ class TestKNNMutualInformation:
 
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     @pytest.mark.parametrize("k", [1, 2, 5, 10])
-    def test_compute_no_noise_both_1D(self, dtype: np.dtype, k:int):
+    def test_compute_no_noise_both_1D(self, dtype: np.dtype, k: int):
         rng = np.random.default_rng(0)
         x = rng.standard_normal(100, dtype=dtype)
         y = rng.standard_normal(100, dtype=dtype)
@@ -197,7 +194,7 @@ class TestKNNMutualInformation:
 
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     @pytest.mark.parametrize("k", [1, 2, 5, 10])
-    def test_compute_no_noise_both_2D(self, dtype: np.dtype, k:int):
+    def test_compute_no_noise_both_2D(self, dtype: np.dtype, k: int):
         rng = np.random.default_rng(0)
         nx = 3
         ny = 2
@@ -213,7 +210,7 @@ class TestKNNMutualInformation:
 
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     @pytest.mark.parametrize("k", [1, 2, 5, 10])
-    def test_compute_no_noise_x_2D_y_1D(self, dtype: np.dtype, k:int):
+    def test_compute_no_noise_x_2D_y_1D(self, dtype: np.dtype, k: int):
         rng = np.random.default_rng(0)
         nx = 3
         x = rng.standard_normal((100, nx), dtype=dtype)
@@ -227,7 +224,7 @@ class TestKNNMutualInformation:
 
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     @pytest.mark.parametrize("k", [1, 2, 5, 10])
-    def test_compute_no_noise_x_1D_y_2D(self, dtype: np.dtype, k:int):
+    def test_compute_no_noise_x_1D_y_2D(self, dtype: np.dtype, k: int):
         rng = np.random.default_rng(0)
         ny = 5
         x = rng.standard_normal(100, dtype=dtype)
@@ -241,7 +238,26 @@ class TestKNNMutualInformation:
 
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     @pytest.mark.parametrize("k", [1, 2, 5, 10])
-    def test_compute_noise_both_1D(self, dtype: np.dtype, k:int):
+    def test_compute_no_noise_x_3D_y_3D(self, dtype: np.dtype, k: int):
+        rng = np.random.default_rng(0)
+        ny = 5
+        nx = 4
+        bx = 3
+        by = 3
+        x = rng.standard_normal((100, bx, nx), dtype=dtype)
+        y = rng.standard_normal((100, by, ny), dtype=dtype)
+        obj = KNNMutualInformation(k=k, add_noise=False, dtype=dtype)
+        mi_gpu = obj.compute(cp.asarray(x), cp.asarray(y))
+        mi_cpu = np.empty((bx, nx, ny), dtype=dtype)
+        for b in range(bx):
+            for i in range(nx):
+                for j in range(ny):
+                    mi_cpu[b, i, j] = mutual_information_kdtree(x[:, b, i], y[:, b, j], k=k)
+        cp.testing.assert_allclose(mi_gpu, mi_cpu, rtol=1e-5, atol=1e-6)
+
+    @pytest.mark.parametrize("dtype", [np.float32, np.float64])
+    @pytest.mark.parametrize("k", [1, 2, 5, 10])
+    def test_compute_noise_both_1D(self, dtype: np.dtype, k: int):
         rng = np.random.default_rng(0)
         x = rng.standard_normal(100, dtype=dtype)
         y = rng.standard_normal(100, dtype=dtype)
@@ -252,7 +268,7 @@ class TestKNNMutualInformation:
 
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     @pytest.mark.parametrize("k", [1, 2, 5, 10])
-    def test_compute_noise_both_2D(self, dtype: np.dtype, k:int):
+    def test_compute_noise_both_2D(self, dtype: np.dtype, k: int):
         rng = np.random.default_rng(0)
         nx = 3
         ny = 2
@@ -268,7 +284,7 @@ class TestKNNMutualInformation:
 
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     @pytest.mark.parametrize("k", [1, 2, 5, 10])
-    def test_compute_noise_x_2D_y_1D(self, dtype: np.dtype, k:int):
+    def test_compute_noise_x_2D_y_1D(self, dtype: np.dtype, k: int):
         rng = np.random.default_rng(0)
         nx = 3
         x = rng.standard_normal((100, nx), dtype=dtype)
@@ -282,7 +298,7 @@ class TestKNNMutualInformation:
 
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     @pytest.mark.parametrize("k", [1, 2, 5, 10])
-    def test_compute_noise_x_1D_y_2D(self, dtype: np.dtype, k:int):
+    def test_compute_noise_x_1D_y_2D(self, dtype: np.dtype, k: int):
         rng = np.random.default_rng(0)
         ny = 5
         x = rng.standard_normal(100, dtype=dtype)
@@ -294,6 +310,24 @@ class TestKNNMutualInformation:
             mi_cpu[i] = mutual_information_kdtree(x, y[:, i], k=k)
         cp.testing.assert_allclose(mi_gpu[0], mi_cpu, rtol=1e-5, atol=1e-6)
 
+    @pytest.mark.parametrize("dtype", [np.float32, np.float64])
+    @pytest.mark.parametrize("k", [1, 2, 5, 10])
+    def test_compute_noise_x_3D_y_3D(self, dtype: np.dtype, k: int):
+        rng = np.random.default_rng(0)
+        ny = 5
+        nx = 4
+        bx = 3
+        by = 3
+        x = rng.standard_normal((100, bx, nx), dtype=dtype)
+        y = rng.standard_normal((100, by, ny), dtype=dtype)
+        obj = KNNMutualInformation(k=k, add_noise=True, dtype=dtype)
+        mi_gpu = obj.compute(cp.asarray(x), cp.asarray(y))
+        mi_cpu = np.empty((bx, nx, ny), dtype=dtype)
+        for b in range(bx):
+            for i in range(nx):
+                for j in range(ny):
+                    mi_cpu[b, i, j] = mutual_information_kdtree(x[:, b, i], y[:, b, j], k=k)
+        cp.testing.assert_allclose(mi_gpu, mi_cpu, rtol=1e-5, atol=1e-6)
 
     def test_compute_pairwise_wrong_dim_1D(self):
         obj = KNNMutualInformation()
@@ -315,7 +349,7 @@ class TestKNNMutualInformation:
 
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     @pytest.mark.parametrize("k", [1, 2, 5, 10])
-    def test_compute_pairwise_no_noise(self, dtype: np.dtype, k:int):
+    def test_compute_pairwise_no_noise(self, dtype: np.dtype, k: int):
         rng = np.random.default_rng(0)
         n = 2
         data = rng.standard_normal((100, n), dtype=dtype)
