@@ -26,12 +26,8 @@ def knn_statistics_kdtree(x: np.ndarray, y: np.ndarray, k: int) -> tuple[np.ndar
         x_tree = cKDTree(x[pair, :, None])
         y_tree = cKDTree(y[pair, :, None])
 
-        nx[pair] = x_tree.query_ball_point(
-            x[pair, :, None], r, p=np.inf, return_length=True
-        )
-        ny[pair] = y_tree.query_ball_point(
-            y[pair, :, None], r, p=np.inf, return_length=True
-        )
+        nx[pair] = x_tree.query_ball_point(x[pair, :, None], r, p=np.inf, return_length=True)
+        ny[pair] = y_tree.query_ball_point(y[pair, :, None], r, p=np.inf, return_length=True)
 
     return nx, ny
 
@@ -159,7 +155,7 @@ class TestKNNStatistics:
     @pytest.mark.parametrize("n_pairs", [1, 2, 5, 10, 100, 1_000])
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     def test_knn_statistics_against_kdtree_variable_number_pairs(
-            self, n_pairs: int, dtype: np.dtype
+        self, n_pairs: int, dtype: np.dtype
     ):
         seed = 42
         generator = np.random.default_rng(seed=seed)
@@ -175,7 +171,7 @@ class TestKNNStatistics:
     @pytest.mark.parametrize("n_samples", [5, 10, 100, 1_000])
     @pytest.mark.parametrize("dtype", [np.float32, np.float64])
     def test_knn_statistics_against_kdtree_variable_number_samples(
-            self, n_samples: int, dtype: np.dtype
+        self, n_samples: int, dtype: np.dtype
     ):
         seed = 42
         generator = np.random.default_rng(seed=seed)
