@@ -9,12 +9,12 @@ from ..backends.cupy import knn_statistics
 # TODO: Compléter la classe mère
 class KNNMutualInformation:
     def __init__(
-            self,
-            k: int = 3,
-            add_noise: bool = True,
-            noise_intensity: float = 1e-8,
-            dtype: cp.dtype = cp.float32,
-            random_state: int | cp.random.Generator | None = None,
+        self,
+        k: int = 3,
+        add_noise: bool = True,
+        noise_intensity: float = 1e-8,
+        dtype: cp.dtype = cp.float32,
+        random_state: int | cp.random.Generator | None = None,
     ):
         if k < 1:
             raise ValueError("k must be at least one.")
@@ -76,7 +76,7 @@ class KNNMutualInformation:
         return mi
 
     def _compute_from_pairs(
-            self, x_pairs: cp.ndarray, y_pairs: cp.ndarray, n_samples: int
+        self, x_pairs: cp.ndarray, y_pairs: cp.ndarray, n_samples: int
     ) -> cp.ndarray:
         nx, ny = knn_statistics(x_pairs, y_pairs, self._k)
 
@@ -114,8 +114,8 @@ class KNNMutualInformation:
             elif by == 1:
                 y = cp.broadcast_to(y, (n_samples, bx, dy))
             else:
-                msg = "Batch dimensions of x and y must match, or one of them must be one.\n"
-                msg += f"Got {bx} for x and {by} for y."
+                msg = "Batch dimensions of x and y must match, or one of them must be one."
+                msg += f"\nGot {bx} for x and {by} for y."
                 raise ValueError(msg)
         batch_size = max(bx, by)
 
