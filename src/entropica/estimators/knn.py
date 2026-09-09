@@ -3,11 +3,10 @@ from cupy.typing import ArrayLike
 from cupyx.scipy.special import digamma
 
 from ..backends.cupy import knn_statistics
+from .base import BaseEstimator
 
 
-# TODO: Faire une classe mère Estimator. MI en hérite, Entropy aussi, KL Divergence aussi, etc.
-# TODO: Compléter la classe mère
-class KNNMutualInformation:
+class KNNMutualInformation(BaseEstimator):
     def __init__(
         self,
         k: int = 3,
@@ -26,23 +25,7 @@ class KNNMutualInformation:
         if dtype not in (cp.dtype(cp.float32), cp.dtype(cp.float64)):
             msg = f"dtype must be float32 or float64, got {dtype}"
             raise TypeError(msg)
-        self._dtype = dtype
-        self.random_state = random_state
-
-    @property
-    def random_state(self) -> cp.random.Generator:
-        return self._random_state
-
-    @random_state.setter
-    def random_state(self, random_state: int | cp.random.Generator | None):
-        if random_state is None:
-            self._random_state = cp.random.default_rng()
-        elif isinstance(random_state, int):
-            self._random_state = cp.random.default_rng(random_state)
-        elif isinstance(random_state, cp.random.Generator):
-            self._random_state = random_state
-        else:
-            raise TypeError(f"Unknown random_state type: {type(random_state)}")
+        super().__init__(dtype, random_state)
 
     def _noisy_data(self, data: cp.ndarray) -> cp.ndarray:
         noisy_data = data + self._noise_intensity * self._random_state.standard_normal(
