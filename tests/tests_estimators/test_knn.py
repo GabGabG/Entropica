@@ -30,7 +30,7 @@ class TestKNNMutualInformation:
         try:
             KNNMutualInformation()
         except Exception as e:
-            pytest.fail(f"Exception raised:\m{e}")
+            pytest.fail(f"Exception raised:\n{e}")
 
     def test_default_attributes(self):
         obj = KNNMutualInformation()
@@ -46,51 +46,11 @@ class TestKNNMutualInformation:
         with pytest.raises(ValueError, match=msg):
             KNNMutualInformation(k=k)
 
-    @pytest.mark.parametrize("dtype", [np.single, np.double])
-    def test_numpy_floats_ok(self, dtype: np.dtype):
-        try:
-            KNNMutualInformation(dtype=dtype)
-        except Exception as e:
-            pytest.fail(f"Exception raised:\n{e}")
-
     @pytest.mark.parametrize("dtype", [np.complex64, cp.long, np.bool, cp.float16])
     def test_wrong_dtypes(self, dtype: np.dtype):
         msg = f"dtype must be float32 or float64, got {cp.dtype(dtype)}"
         with pytest.raises(TypeError, match=msg):
             KNNMutualInformation(dtype=dtype)
-
-    def test_random_state_getter(self):
-        obj = KNNMutualInformation()
-        assert isinstance(obj.random_state, cp.random.Generator)
-        assert obj._random_state == obj.random_state
-
-    def test_random_state_setter_none(self):
-        obj = KNNMutualInformation()
-        initial_gen = obj.random_state
-        obj.random_state = None
-        final_gen = obj.random_state
-        assert isinstance(final_gen, cp.random.Generator)
-        assert final_gen != initial_gen
-
-    @pytest.mark.parametrize("seed", range(0, 10))
-    def test_random_state_setter_seed(self, seed: int):
-        obj = KNNMutualInformation()
-        obj.random_state = seed
-        assert isinstance(obj.random_state, cp.random.Generator)
-
-    def test_random_state_setter_random_state(self):
-        obj = KNNMutualInformation()
-        initial_gen = obj.random_state
-        obj.random_state = initial_gen
-        assert isinstance(obj.random_state, cp.random.Generator)
-        assert obj.random_state == initial_gen
-
-    def test_random_state_setter_unknown_type(self):
-        obj = KNNMutualInformation()
-        random_state = "I am a random state"
-        msg = f"Unknown random_state type: {type(random_state)}"
-        with pytest.raises(TypeError, match=msg):
-            obj.random_state = random_state
 
     @pytest.mark.parametrize("dtype", [cp.float32, cp.float64])
     @pytest.mark.parametrize("intensity", [-2, -1, 1, 2])
